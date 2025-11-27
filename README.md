@@ -5,6 +5,11 @@ AI-Powered Fashion Analysis & Style Generation Platform
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
+[![Live Demo](https://img.shields.io/badge/Live-Demo-blue.svg)](https://svc-01kb2kaj6e225wh9hdv8rwfpfc.01kaabs55f12xsvgzarqrjkdsa.lmapp.run)
+
+## 🚀 Live Demo
+
+**Try the app now:** https://svc-01kb2kaj6e225wh9hdv8rwfpfc.01kaabs55f12xsvgzarqrjkdsa.lmapp.run
 
 ## 🎯 Overview
 
