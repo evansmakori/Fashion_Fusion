@@ -325,7 +325,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 👥 Authors
 
-- **Fashion Fusion Team** - *Initial work*
+- **Fashion Fusion Team**
+- evansmakori - *Initial work*
 
 ## 🙏 Acknowledgments
 
@@ -336,7 +337,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-For support, email evamakorieva@gmail.com or open an issue in the GitHub repository.
+For support, Open an issue in the GitHub repository.
 
 ## 🗺️ Roadmap
 
