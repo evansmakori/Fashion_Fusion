@@ -1,0 +1,43 @@
+application "fashion-fusion-shop" {
+
+  env "VULTR_API_KEY" {
+    default = "EZIOUWTTRUSSUS2VWZVD6ZCA4N5O3HILSPDQ"
+  }
+
+  env "STABILITY_API_KEY" {
+    default = "sk-FWrcztSoZmHT9sGKXpK92EB75jGOKtqiyhfMpqmgPrmdXhF7"
+  }
+
+
+  service "api-gateway" {
+    visibility = "public"
+  }
+
+  service "image-generation-service" {
+    visibility = "private"
+  }
+
+  service "frontend-service" {
+    visibility = "public"
+  }
+
+  service "image-analysis-service" {
+    visibility = "private"
+  }
+
+  service "product-service" {
+    visibility = "private"
+  }
+
+  service "order-service" {
+    visibility = "private"
+  }
+
+  service "payment-service" {
+    visibility = "private"
+  }
+
+  smartsql "fashion-db" {}
+
+}
+
