@@ -1,6 +1,41 @@
 // SQL Schema for fashion-db
 
 export const schema = `
+-- Users Table (deprecated - now using Firebase Auth)
+-- Kept for backwards compatibility, but Firebase is the source of truth
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  full_name TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  last_login DATETIME
+);
+
+CREATE INDEX idx_users_email ON users(email);
+
+-- User Preferences Table
+CREATE TABLE IF NOT EXISTS user_preferences (
+  user_id TEXT PRIMARY KEY,
+  preferences TEXT NOT NULL, -- JSON string with user preferences
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- User Activity Table
+CREATE TABLE IF NOT EXISTS user_activity (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  activity_type TEXT NOT NULL, -- e.g., 'image_generated', 'style_viewed', 'product_added'
+  activity_data TEXT, -- JSON string with activity details
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_activity_user_id ON user_activity(user_id);
+CREATE INDEX idx_activity_type ON user_activity(activity_type);
+CREATE INDEX idx_activity_created_at ON user_activity(created_at);
+
 CREATE TABLE IF NOT EXISTS categories (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,

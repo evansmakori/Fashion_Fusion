@@ -22,12 +22,25 @@ async function run() {
   }
 
   const files = await walk(distDir);
-  const allowed = files.filter(f => /\.(html|js|css|svg|png|jpg|jpeg|gif|webp|ico|txt|json|map)$/i.test(f));
+  const allowed = files.filter(f => /\.(html|js|css|svg|png|jpg|jpeg|gif|webp|ico|txt|json|map|mp4)$/i.test(f));
 
   const entries = [];
   for (const f of allowed) {
     const rel = path.relative(distDir, f).replace(/\\/g, '/');
-    const content = await fs.readFile(f, 'utf-8');
+    
+    // Check if file is binary (images and videos)
+    const isBinary = /\.(png|jpg|jpeg|gif|webp|ico|mp4)$/i.test(f);
+    
+    let content;
+    if (isBinary) {
+      // Read as binary and encode to base64
+      const buffer = await fs.readFile(f);
+      content = buffer.toString('base64');
+    } else {
+      // Read as text
+      content = await fs.readFile(f, 'utf-8');
+    }
+    
     // Use JSON string literal to avoid template escaping issues
     entries.push({ rel, json: JSON.stringify(content) });
   }

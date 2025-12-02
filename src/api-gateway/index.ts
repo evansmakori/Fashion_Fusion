@@ -6,6 +6,11 @@ import { QueueSendOptions } from '@liquidmetal-ai/raindrop-framework';
 import { KvCachePutOptions, KvCacheGetOptions } from '@liquidmetal-ai/raindrop-framework';
 import { BucketPutOptions, BucketListOptions } from '@liquidmetal-ai/raindrop-framework';
 import { Env } from './raindrop.gen';
+import { initializeFirebaseAdmin } from '../_app/firebase-admin';
+import profileRoutes from './profile-routes';
+
+// Initialize Firebase Admin SDK
+initializeFirebaseAdmin();
 
 // Create Hono app with middleware
 const app = new Hono<{ Bindings: Env }>();
@@ -247,6 +252,233 @@ app.get('/', (c) => {
 // Health check endpoint
 app.get('/health', (c) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Mount profile routes (protected by Firebase auth middleware)
+app.route('/api/profile', profileRoutes);
+
+// === Authentication Routes ===
+
+// Helper function to hash passwords (simple crypto hash - in production use bcrypt)
+async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Helper function to generate JWT token (simplified - in production use proper JWT library)
+function generateToken(userId: string, email: string): string {
+  const payload = {
+    userId,
+    email,
+    iat: Date.now(),
+    exp: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
+  };
+  // In production, this should be signed with a secret key
+  return Buffer.from(JSON.stringify(payload)).toString('base64');
+}
+
+app.post('/api/auth/signup', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { email, password, fullName } = body;
+
+    // Validate input
+    if (!email || !password) {
+      return c.json({ 
+        error: 'Email and password are required',
+        code: 'INVALID_INPUT'
+      }, 400);
+    }
+
+    if (password.length < 6) {
+      return c.json({ 
+        error: 'Password must be at least 6 characters',
+        code: 'INVALID_PASSWORD'
+      }, 400);
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return c.json({ 
+        error: 'Invalid email format',
+        code: 'INVALID_EMAIL'
+      }, 400);
+    }
+
+    // Get database connection
+    const db = c.env.FASHION_DB;
+    if (!db) {
+      return c.json({ 
+        error: 'Database unavailable',
+        code: 'SERVICE_UNAVAILABLE'
+      }, 503);
+    }
+
+    // Check if user already exists
+    const checkResult = await db.executeQuery({
+      sqlQuery: `SELECT id FROM users WHERE email = '${email.toLowerCase().replace(/'/g, "''")}'`,
+      format: 'json'
+    });
+
+    console.log('Check result:', JSON.stringify(checkResult));
+
+    if (checkResult.results) {
+      try {
+        const rows = JSON.parse(checkResult.results);
+        console.log('Parsed rows:', rows);
+        if (rows && Array.isArray(rows) && rows.length > 0) {
+          return c.json({ 
+            error: 'User with this email already exists',
+            code: 'USER_EXISTS'
+          }, 409);
+        }
+      } catch (parseError) {
+        console.error('Error parsing check results:', parseError);
+        // If we can't parse, check the raw string
+        if (checkResult.results.includes('"id"')) {
+          return c.json({ 
+            error: 'User with this email already exists',
+            code: 'USER_EXISTS'
+          }, 409);
+        }
+      }
+    }
+
+    // Hash password
+    const passwordHash = await hashPassword(password);
+
+    // Create user
+    const userId = crypto.randomUUID();
+    const insertResult = await db.executeQuery({
+      sqlQuery: `INSERT INTO users (id, email, password_hash, full_name, created_at, updated_at)
+        VALUES ('${userId}', '${email.toLowerCase().replace(/'/g, "''")}', '${passwordHash}', ${fullName ? `'${fullName.replace(/'/g, "''")}'` : 'NULL'}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      format: 'json'
+    });
+
+    // Generate token
+    const token = generateToken(userId, email);
+
+    return c.json({
+      success: true,
+      user: {
+        id: userId,
+        email: email.toLowerCase(),
+        name: fullName || email.split('@')[0]
+      },
+      token
+    }, 201);
+
+  } catch (error) {
+    console.error('Error in /api/auth/signup:', error);
+    return c.json({ 
+      error: 'Failed to create account',
+      code: 'SIGNUP_FAILED',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
+});
+
+app.post('/api/auth/login', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { email, password } = body;
+
+    // Validate input
+    if (!email || !password) {
+      return c.json({ 
+        error: 'Email and password are required',
+        code: 'INVALID_INPUT'
+      }, 400);
+    }
+
+    // Get database connection
+    const db = c.env.FASHION_DB;
+    if (!db) {
+      return c.json({ 
+        error: 'Database unavailable',
+        code: 'SERVICE_UNAVAILABLE'
+      }, 503);
+    }
+
+    // Find user
+    const userResult = await db.executeQuery({
+      sqlQuery: `SELECT id, email, password_hash, full_name 
+        FROM users 
+        WHERE email = '${email.toLowerCase().replace(/'/g, "''")}'`,
+      format: 'json'
+    });
+
+    console.log('Login user result:', JSON.stringify(userResult));
+
+    if (!userResult.results) {
+      console.log('No results returned from query');
+      return c.json({ 
+        error: 'Invalid email or password',
+        code: 'INVALID_CREDENTIALS'
+      }, 401);
+    }
+
+    let users;
+    try {
+      users = JSON.parse(userResult.results);
+      console.log('Parsed users:', users);
+    } catch (parseError) {
+      console.error('Error parsing user results:', parseError);
+      return c.json({ 
+        error: 'Invalid email or password',
+        code: 'INVALID_CREDENTIALS'
+      }, 401);
+    }
+
+    if (!users || !Array.isArray(users) || users.length === 0) {
+      console.log('No users found or invalid format');
+      return c.json({ 
+        error: 'Invalid email or password',
+        code: 'INVALID_CREDENTIALS'
+      }, 401);
+    }
+
+    const user = users[0];
+    console.log('Found user:', user.id, user.email);
+
+    // Verify password
+    const passwordHash = await hashPassword(password);
+    if (passwordHash !== user.password_hash) {
+      return c.json({ 
+        error: 'Invalid email or password',
+        code: 'INVALID_CREDENTIALS'
+      }, 401);
+    }
+
+    // Update last login
+    await db.executeQuery({
+      sqlQuery: `UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = '${user.id}'`,
+      format: 'json'
+    });
+
+    // Generate token
+    const token = generateToken(user.id, user.email);
+
+    return c.json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.full_name || user.email.split('@')[0]
+      },
+      token
+    }, 200);
+
+  } catch (error) {
+    console.error('Error in /api/auth/login:', error);
+    return c.json({ 
+      error: 'Failed to login',
+      code: 'LOGIN_FAILED',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
 });
 
 // === Basic API Routes ===

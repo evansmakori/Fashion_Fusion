@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import AuthForm from './AuthForm';
 import ImageForm from './ImageForm';
+import LandingPage from './LandingPage';
 import { Toast } from './ui';
 import { useToast } from './hooks/useToast';
 import './styles.css';
+import './landing-page.css';
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showLanding, setShowLanding] = useState(true);
   const { toasts, removeToast } = useToast();
 
   useEffect(() => {
@@ -17,6 +20,7 @@ export default function App() {
     
     if (token && userData) {
       setUser(JSON.parse(userData));
+      setShowLanding(false);
     }
     setLoading(false);
   }, []);
@@ -25,12 +29,23 @@ export default function App() {
     localStorage.setItem('authToken', token);
     localStorage.setItem('userData', JSON.stringify(userData));
     setUser(userData);
+    setShowLanding(false);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Call Firebase logout
+    const { logout } = await import('./auth-service');
+    await logout();
+    
+    // Clear local storage
     localStorage.removeItem('authToken');
     localStorage.removeItem('userData');
     setUser(null);
+    setShowLanding(true);
+  };
+
+  const handleGetStarted = () => {
+    setShowLanding(false);
   };
 
   if (loading) {
@@ -41,41 +56,101 @@ export default function App() {
     );
   }
 
-  if (!user) {
-    return <AuthForm onLogin={handleLogin} />;
-  }
-
   return (
     <div className="app-container">
-      <header className="app-header">
+      {/* Navigation Header */}
+      <header className="main-header">
         <div className="header-content">
-          <h1 className="logo">
-            <span className="logo-icon">✨</span>
-            Fashion Fusion
-          </h1>
-          <div className="user-menu">
-            <div className="user-info">
-              <div className="user-avatar" title={user.email}>
-                {user.email.charAt(0).toUpperCase()}
-              </div>
-              <span className="user-email">{user.email}</span>
-            </div>
-            <button onClick={handleLogout} className="logout-btn" aria-label="Logout">
-              <span>Logout</span>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M6 14H3.33333C2.97971 14 2.64057 13.8595 2.39052 13.6095C2.14048 13.3594 2 13.0203 2 12.6667V3.33333C2 2.97971 2.14048 2.64057 2.39052 2.39052C2.64057 2.14048 2.97971 2 3.33333 2H6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M10.6667 11.3333L14 8L10.6667 4.66667" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M14 8H6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
+          <div className="logo-section" onClick={() => setShowLanding(true)} style={{ cursor: 'pointer' }}>
+            <img src="/Logo.png" alt="Fashion Fusion" className="header-logo" />
+            <span className="header-brand">Fashion Fusion</span>
           </div>
+          <nav className="nav-menu">
+            {user ? (
+              <>
+                <button onClick={() => setShowLanding(true)} className="nav-link">
+                  Home
+                </button>
+                <button onClick={() => setShowLanding(false)} className="nav-link">
+                  AI Studio
+                </button>
+                <div className="user-menu">
+                  <div className="user-avatar" title={user.email}>
+                    {user.email.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="user-email-header">{user.email}</span>
+                  <button onClick={handleLogout} className="logout-btn-header">
+                    Logout
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <button onClick={() => setShowLanding(true)} className="nav-link">
+                  Home
+                </button>
+                <button onClick={handleGetStarted} className="nav-link-cta">
+                  Get Started
+                </button>
+              </>
+            )}
+          </nav>
         </div>
       </header>
-      <main className="main-content">
-        <ImageForm />
+
+      {/* Main Content */}
+      <main className="app-main">
+        {showLanding ? (
+          <LandingPage onGetStarted={handleGetStarted} />
+        ) : !user ? (
+          <div className="auth-wrapper">
+            <AuthForm onLogin={handleLogin} />
+          </div>
+        ) : (
+          <div className="studio-content">
+            <ImageForm />
+          </div>
+        )}
       </main>
-      <footer className="app-footer">
-        <p>© 2024 Fashion Fusion - AI-Powered Image Generation</p>
+
+      {/* Footer */}
+      <footer className="main-footer">
+        <div className="footer-content">
+          <div className="footer-section">
+            <h4>Fashion Fusion</h4>
+            <p>AI-Powered Fashion Transformation Platform</p>
+          </div>
+          <div className="footer-section">
+            <h4>Platform</h4>
+            <ul>
+              <li>AI Image Generation</li>
+              <li>Fashion Analysis</li>
+              <li>Style Variations</li>
+              <li>E-commerce Integration</li>
+            </ul>
+          </div>
+          <div className="footer-section">
+            <h4>Technology</h4>
+            <ul>
+              <li>Stability AI</li>
+              <li>Vultr AI Analysis</li>
+              <li>Smart Detection</li>
+              <li>Price Intelligence</li>
+            </ul>
+          </div>
+          <div className="footer-section">
+            <h4>Company</h4>
+            <ul>
+              <li>About</li>
+              <li>Contact</li>
+              <li>Privacy</li>
+              <li>Terms</li>
+            </ul>
+          </div>
+        </div>
+        <div className="footer-bottom">
+          <p>&copy; 2024 Fashion Fusion. All rights reserved.</p>
+        </div>
       </footer>
       
       {/* Toast Notifications */}

@@ -93,6 +93,7 @@ function contentTypeFor(pathname: string): string {
   if (pathname.endsWith('.jpg') || pathname.endsWith('.jpeg')) return 'image/jpeg';
   if (pathname.endsWith('.webp')) return 'image/webp';
   if (pathname.endsWith('.ico')) return 'image/x-icon';
+  if (pathname.endsWith('.mp4')) return 'video/mp4';
   if (pathname.endsWith('.json')) return 'application/json; charset=utf-8';
   if (pathname.endsWith('.map')) return 'application/json; charset=utf-8';
   return 'text/plain; charset=utf-8';
@@ -111,6 +112,36 @@ app.get('/assets/*', (c) => {
   const body = STATIC_FILES[rel];
   if (!body) return c.notFound();
   return new Response(body, { status: 200, headers: { 'content-type': contentTypeFor(rel) } });
+});
+
+// Serve image and video files directly from STATIC_FILES (now base64 encoded)
+const imageFiles = ['Logo.png', 'Background.mp4', 'Professional.jpg', 'Casual.jpg', 'Streetwear.jpg', 'Dinner.jpg'];
+imageFiles.forEach(imageName => {
+  app.get(`/${imageName}`, (c) => {
+    const imageData = STATIC_FILES[imageName];
+    
+    if (!imageData) {
+      return c.notFound();
+    }
+    
+    // Images are now base64 encoded in STATIC_FILES
+    try {
+      // Decode base64 to binary
+      const binaryString = atob(imageData);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      return new Response(bytes, { 
+        status: 200, 
+        headers: { 'content-type': contentTypeFor(imageName) } 
+      });
+    } catch (error) {
+      console.error('Error decoding image:', imageName, error);
+      return c.notFound();
+    }
+  });
 });
 
 // Fallback to SPA index
