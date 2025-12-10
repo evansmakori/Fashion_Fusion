@@ -10,11 +10,72 @@ import {
 } from "firebase/auth";
 import { auth, googleProvider } from "./firebase-config";
 
+// Retry configuration for network failures
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  initialDelay: 1000, // 1 second
+  maxDelay: 10000, // 10 seconds
+  backoffMultiplier: 2
+};
+
+// Helper to check network connectivity
+async function checkNetworkConnectivity() {
+  try {
+    const response = await fetch('https://www.google.com', { 
+      method: 'HEAD',
+      mode: 'no-cors'
+    });
+    return true;
+  } catch (error) {
+    console.error('Network connectivity check failed:', error);
+    return false;
+  }
+}
+
+// Helper function to retry operations with exponential backoff
+async function retryOperation(operation, operationName = 'operation') {
+  let lastError;
+  
+  for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+    try {
+      console.log(`Attempt ${attempt + 1}/${RETRY_CONFIG.maxRetries + 1} for ${operationName}`);
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      
+      // Only retry on network errors
+      if (error.code === 'auth/network-request-failed') {
+        if (attempt < RETRY_CONFIG.maxRetries) {
+          const delay = Math.min(
+            RETRY_CONFIG.initialDelay * Math.pow(RETRY_CONFIG.backoffMultiplier, attempt),
+            RETRY_CONFIG.maxDelay
+          );
+          console.warn(`Network error on attempt ${attempt + 1}, retrying in ${delay}ms...`, error);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          console.error(`All ${RETRY_CONFIG.maxRetries + 1} retry attempts failed for ${operationName}`);
+        }
+      } else {
+        // Not a network error, don't retry
+        throw error;
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
 // Sign up with email and password
 export const signUpWithEmail = async (email, password, displayName) => {
   try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
+    console.log('Starting sign up process for:', email);
+    
+    const result = await retryOperation(async () => {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      return userCredential;
+    }, 'Sign up');
+    
+    const user = result.user;
     
     // Update display name
     if (displayName) {
@@ -23,6 +84,8 @@ export const signUpWithEmail = async (email, password, displayName) => {
     
     // Send email verification
     await sendEmailVerification(user);
+    
+    console.log('Sign up successful for:', email);
     
     return {
       success: true,
@@ -36,6 +99,19 @@ export const signUpWithEmail = async (email, password, displayName) => {
     };
   } catch (error) {
     console.error("Error signing up:", error);
+    
+    if (error.code === 'auth/network-request-failed') {
+      // Provide more detailed network error message
+      const isOnline = await checkNetworkConnectivity();
+      console.log('Device online status:', isOnline);
+      return {
+        success: false,
+        error: isOnline 
+          ? 'Network error connecting to Firebase. Please try again or check your firewall/proxy settings.'
+          : 'No internet connection detected. Please check your network and try again.'
+      };
+    }
+    
     return {
       success: false,
       error: getErrorMessage(error.code)
@@ -46,8 +122,16 @@ export const signUpWithEmail = async (email, password, displayName) => {
 // Sign in with email and password
 export const signInWithEmail = async (email, password) => {
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
+    console.log('Starting sign in process for:', email);
+    
+    const result = await retryOperation(async () => {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      return userCredential;
+    }, 'Sign in');
+    
+    const user = result.user;
+    
+    console.log('Sign in successful for:', email);
     
     return {
       success: true,
@@ -60,6 +144,18 @@ export const signInWithEmail = async (email, password) => {
     };
   } catch (error) {
     console.error("Error signing in:", error);
+    
+    if (error.code === 'auth/network-request-failed') {
+      const isOnline = await checkNetworkConnectivity();
+      console.log('Device online status:', isOnline);
+      return {
+        success: false,
+        error: isOnline 
+          ? 'Network error connecting to Firebase. Please try again or check your firewall/proxy settings.'
+          : 'No internet connection detected. Please check your network and try again.'
+      };
+    }
+    
     return {
       success: false,
       error: getErrorMessage(error.code)
@@ -70,8 +166,16 @@ export const signInWithEmail = async (email, password) => {
 // Sign in with Google
 export const signInWithGoogle = async () => {
   try {
-    const result = await signInWithPopup(auth, googleProvider);
+    console.log('Starting Google sign in process');
+    
+    const result = await retryOperation(async () => {
+      const popupResult = await signInWithPopup(auth, googleProvider);
+      return popupResult;
+    }, 'Google sign in');
+    
     const user = result.user;
+    
+    console.log('Google sign in successful for:', user.email);
     
     return {
       success: true,
@@ -85,6 +189,26 @@ export const signInWithGoogle = async () => {
     };
   } catch (error) {
     console.error("Error signing in with Google:", error);
+    
+    if (error.code === 'auth/network-request-failed') {
+      const isOnline = await checkNetworkConnectivity();
+      console.log('Device online status:', isOnline);
+      return {
+        success: false,
+        error: isOnline 
+          ? 'Network error connecting to Firebase. Please try again or check your firewall/proxy settings.'
+          : 'No internet connection detected. Please check your network and try again.'
+      };
+    }
+    
+    // Special handling for popup-closed error
+    if (error.code === 'auth/popup-closed-by-user') {
+      return {
+        success: false,
+        error: getErrorMessage(error.code)
+      };
+    }
+    
     return {
       success: false,
       error: getErrorMessage(error.code)

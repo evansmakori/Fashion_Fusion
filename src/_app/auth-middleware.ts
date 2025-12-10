@@ -1,5 +1,4 @@
 import { Context, Next } from 'hono';
-import { verifyIdToken } from './firebase-admin';
 import { verifyTokenWithBackend, checkBackendHealth } from './firebase-backend-client';
 
 // Extend Context type to include user
@@ -35,19 +34,14 @@ export async function requireAuth(c: Context, next: Next) {
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
-    // Try to verify token with backend service first (more secure)
+    // Verify token with backend service (required in edge environment)
     let decodedToken = await verifyTokenWithBackend(token);
-    
-    // Fallback to local verification if backend is unavailable
-    if (!decodedToken) {
-      console.log('Backend verification unavailable, using local verification');
-      decodedToken = await verifyIdToken(token);
-    }
 
     if (!decodedToken) {
+      console.warn('Token verification failed - backend service may be unavailable');
       return c.json({
         error: 'Unauthorized',
-        message: 'Invalid or expired token',
+        message: 'Unable to verify token - backend service unavailable',
         code: 'INVALID_TOKEN'
       }, 401);
     }
@@ -83,14 +77,14 @@ export async function optionalAuth(c: Context, next: Next) {
     
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
-      const decodedToken = await verifyIdToken(token);
+      const decodedToken = await verifyTokenWithBackend(token);
 
       if (decodedToken) {
         c.set('user', {
           ...decodedToken,
           uid: decodedToken.uid,
           email: decodedToken.email || '',
-          emailVerified: decodedToken.email_verified || false,
+          emailVerified: decodedToken.emailVerified || false,
           name: decodedToken.name,
           picture: decodedToken.picture
         });

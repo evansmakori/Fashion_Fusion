@@ -6,11 +6,11 @@ import { QueueSendOptions } from '@liquidmetal-ai/raindrop-framework';
 import { KvCachePutOptions, KvCacheGetOptions } from '@liquidmetal-ai/raindrop-framework';
 import { BucketPutOptions, BucketListOptions } from '@liquidmetal-ai/raindrop-framework';
 import { Env } from './raindrop.gen';
-import { initializeFirebaseAdmin } from '../_app/firebase-admin';
 import profileRoutes from './profile-routes';
 
-// Initialize Firebase Admin SDK
-initializeFirebaseAdmin();
+// Note: Firebase Admin SDK is not initialized here as we're in an edge environment
+// The api-gateway uses firebase-backend-client which forwards requests to the Node.js backend
+// This allows us to use Firebase Admin SDK features via the backend service
 
 // Create Hono app with middleware
 const app = new Hono<{ Bindings: Env }>();

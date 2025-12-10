@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import { requireAuth, getCurrentUser } from '../_app/auth-middleware';
-import { getUserById, updateUserProfile } from '../_app/firebase-admin';
 import { getUserFromBackend, updateUserViaBackend } from '../_app/firebase-backend-client';
 import type { Env } from './raindrop.gen';
 
@@ -18,23 +17,20 @@ profile.get('/me', requireAuth, async (c) => {
       }, 404);
     }
 
-    // Try to get user from backend service first
+    // Try to get user from backend service
     const authHeader = c.req.header('Authorization');
     const token = authHeader ? authHeader.substring(7) : '';
     
     let userRecord = await getUserFromBackend(currentUser.uid, token);
     
-    // Fallback to local Firebase Admin if backend unavailable
+    // In edge environments (Raindrop), Firebase Admin SDK is not available
+    // Backend service must be used for all user operations
     if (!userRecord) {
-      console.log('Backend unavailable, using local Firebase Admin');
-      userRecord = await getUserById(currentUser.uid);
-    }
-
-    if (!userRecord) {
+      console.log('Backend unavailable, cannot fetch user profile from edge environment');
       return c.json({
-        error: 'User not found',
-        code: 'USER_NOT_FOUND'
-      }, 404);
+        error: 'Backend service unavailable',
+        code: 'SERVICE_UNAVAILABLE'
+      }, 503);
     }
 
     return c.json({
@@ -116,23 +112,20 @@ profile.put('/me', requireAuth, async (c) => {
       }, 400);
     }
 
-    // Try to update via backend service first
+    // Try to update via backend service
     const authHeader = c.req.header('Authorization');
     const token = authHeader ? authHeader.substring(7) : '';
     
     let updatedUser = await updateUserViaBackend(currentUser.uid, token, updates);
     
-    // Fallback to local Firebase Admin if backend unavailable
+    // In edge environments, Firebase Admin SDK is not available
+    // Must use backend service for all operations
     if (!updatedUser) {
-      console.log('Backend unavailable, using local Firebase Admin');
-      updatedUser = await updateUserProfile(currentUser.uid, updates);
-    }
-
-    if (!updatedUser) {
+      console.log('Backend unavailable, cannot update profile from edge environment');
       return c.json({
-        error: 'Failed to update profile',
-        code: 'UPDATE_FAILED'
-      }, 500);
+        error: 'Backend service unavailable',
+        code: 'SERVICE_UNAVAILABLE'
+      }, 503);
     }
 
     return c.json({
